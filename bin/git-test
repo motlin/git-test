@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- mode: python; coding: utf-8 -*-
 
 # Copyright (c) 2013-2016 Michael Haggerty
@@ -114,9 +114,9 @@ def colored(text, color):
         return color + text + AnsiColor.END
 
 def good_bad_text(value):
-    if value == 'good' or value == 'known-good':
+    if value == '✅' or value == '✅':
         return colored(value, AnsiColor.GREEN)
-    if value == 'bad' or value == 'known-bad':
+    if value == '❌' or value == '❌':
         return colored(value, AnsiColor.RED)
     if value == 'unknown':
         return colored(value, AnsiColor.YELLOW)
@@ -429,7 +429,7 @@ class Test(object):
         except CalledProcessError:
             return 'unknown'
 
-        if status not in ['good', 'bad']:
+        if status not in ['✅', '❌']:
             raise Fatal(
                 'fatal: unrecognized status %r for tree %s^{tree}!'
                 % (status, revision_short or revision),
@@ -449,6 +449,17 @@ class Test(object):
         else:
             if verbosity >= 0:
                 sys.stderr.write('Marked tree %s^{tree} to be %s\n' % (revision, good_bad_text(value)))
+        cmd = [
+            'git', 'notes',
+            'add', '-f', '%s' % (revision,), '-m', value,
+            ]
+        try:
+            chatty_call(cmd)
+        except CalledProcessError:
+            raise Fatal('fatal: error adding note to %s' % (revision,))
+        else:
+            if verbosity >= 0:
+                sys.stderr.write('Marked commit %s to be %s\n' % (revision, good_bad_text(value)))
 
     def forget_status(self, revisions):
         """Forget the stored results (if any) for the specified revisions."""
@@ -515,17 +526,17 @@ class Test(object):
         try:
             self.run(extra_env=extra_env)
         except UserTestError:
-            sys.stdout.write('%s^{tree} %s\n' % (revision, good_bad_text('bad')))
+            sys.stdout.write('%s^{tree} %s\n' % (revision, good_bad_text('❌')))
             if verbosity >= -1:
                 sys.stderr.write(colored(FAIL_HEADER_TEMPLATE % dict(revision=revision), AnsiColor.RED))
                 cmd = ['git', '--no-pager', 'log', '-1', '--decorate', revision]
                 chatty_call(cmd, level=-1)
                 sys.stderr.write(colored(FAIL_TRAILER_TEMPLATE % dict(), AnsiColor.RED))
-                self.write_status(revision, 'bad')
+                self.write_status(revision, '❌')
             raise
         else:
-            sys.stdout.write('%s^{tree} %s\n' % (revision, good_bad_text('good')))
-            self.write_status(revision, 'good')
+            sys.stdout.write('%s^{tree} %s\n' % (revision, good_bad_text('✅')))
+            self.write_status(revision, '✅')
 
     def remove_status(self, msg):
         """Delete the note reference for this test."""
@@ -547,7 +558,7 @@ test_config_re = re.compile(r'^test\.(?P<name>.*)\.(?P<subkey>[^\.]+)$')
 def iter_tests():
     """Iterate over all tests that are defined in the git configuration."""
 
-    cmd = ['git', 'config', '--get-regexp', '--null', '^test\.']
+    cmd = ['git', 'config', '--get-regexp', '--null', r'^test\.']
     out = check_output(cmd)
     lines = [line for line in out.split('\0') if line]
 
@@ -683,12 +694,12 @@ def cmd_run(parser, options):
         try:
             test.run(extra_env=extra_env)
         except UserTestError as e:
-            sys.stdout.write('working-tree %s\n' % good_bad_text('bad'))
+            sys.stdout.write('working-tree %s\n' % good_bad_text('❌'))
             if verbosity >= -1:
                 sys.stderr.write(colored('\n!!! TEST FAILED !!!\n', AnsiColor.RED))
             sys.exit(e.returncode)
         else:
-            sys.stdout.write('working-tree %s\n' % good_bad_text('good'))
+            sys.stdout.write('working-tree %s\n' % good_bad_text('✅'))
             if verbosity >= -1:
                 sys.stderr.write(colored('\nTEST SUCCESSFUL\n', AnsiColor.GREEN))
         finally:
@@ -730,21 +741,21 @@ def cmd_run(parser, options):
         rs = check_output(cmd).rstrip()
         status = test.read_status(r, rs)
 
-        if status == 'good':
-            sys.stdout.write('%s^{tree} %s\n' % (r, good_bad_text('known-good')))
-            sys.stderr.write('Tree %s^{tree} is already known to be %s.\n' % (rs, good_bad_text('good')))
+        if status == '✅':
+            sys.stdout.write('%s^{tree} %s\n' % (r, good_bad_text('✅')))
+            sys.stderr.write('Tree %s^{tree} is already known to be %s.\n' % (rs, good_bad_text('✅')))
 
-        elif status == 'bad':
+        elif status == '❌':
             if options.retest and not options.dry_run:
                 sys.stderr.write(
                     'Tree %s^{tree} was previously tested to be %s; retesting...\n'
-                    % (rs, good_bad_text('bad'))
+                    % (rs, good_bad_text('❌'))
                     )
                 status = None
                 # fall through
             else:
-                sys.stdout.write('%s^{tree} %s\n' % (r, good_bad_text('known-bad')))
-                sys.stderr.write('Tree %s^{tree} is already known to be %s!\n' % (rs, good_bad_text('bad')))
+                sys.stdout.write('%s^{tree} %s\n' % (r, good_bad_text('❌')))
+                sys.stderr.write('Tree %s^{tree} is already known to be %s!\n' % (rs, good_bad_text('❌')))
                 status = 'failed'
                 if options.keep_going:
                     fail_count += 1
@@ -817,10 +828,10 @@ def cmd_results(parser, options):
 
     for r in revisions:
         status = test.read_status(r)
-        if status == 'good':
-            sys.stdout.write('%s^{tree} %s\n' % (r, good_bad_text('known-good')))
-        elif status == 'bad':
-            sys.stdout.write('%s^{tree} %s\n' % (r, good_bad_text('known-bad')))
+        if status == '✅':
+            sys.stdout.write('%s^{tree} %s\n' % (r, good_bad_text('✅')))
+        elif status == '❌':
+            sys.stdout.write('%s^{tree} %s\n' % (r, good_bad_text('❌')))
         elif status == 'unknown':
             sys.stdout.write('%s^{tree} %s\n' % (r, good_bad_text('unknown')))
 

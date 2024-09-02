@@ -123,9 +123,9 @@ AnsiColor.WHITE = AnsiColor('\033[1;37m')
 
 
 def good_bad_text(value):
-    if value == 'good' or value == 'known-good':
+    if value == '✅' or value == '✅':
         return AnsiColor.GREEN(value)
-    if value == 'bad' or value == 'known-bad':
+    if value == '❌' or value == '❌':
         return AnsiColor.RED(value)
     if value == 'unknown':
         return AnsiColor.YELLOW(value)
@@ -229,12 +229,18 @@ def _decode_output(value):
     return value.decode(sys.getfilesystemencoding(), 'surrogateescape')
 
 
+import logging
+
 def check_output(*popenargs, **kwargs):
+    # Convert the command arguments to a string for logging
+    cmd_str = ' '.join(str(arg) for arg in popenargs[0]) if isinstance(popenargs[0], (list, tuple)) else str(popenargs[0])
+    logging.info(f"Executing command: {cmd_str}")
+
     try:
         return _decode_output(_check_output(*popenargs, **kwargs))
     except CalledProcessError as e:
+        logging.error(f"Command failed with return code {e.returncode}: {cmd_str}")
         raise CalledProcessError(e.returncode, e.cmd, _decode_output(e.output))
-
 
 def chatty_call(*popenargs, **kwargs):
     """Run a program like `check_call()`, but with variable verbosity.
@@ -438,7 +444,7 @@ class Test(object):
         except CalledProcessError:
             return 'unknown'
 
-        if status not in ['good', 'bad']:
+        if status not in ['✅', '❌']:
             raise Fatal(
                 'fatal: unrecognized status %r for tree %s^{tree}!'
                 % (status, revision_short or revision),
@@ -462,6 +468,18 @@ class Test(object):
                         revision, good_bad_text(value), self.name,
                     ),
                 )
+
+        cmd = [
+            'git', 'notes',
+            'add', '-f', '%s' % (revision,), '-m', value,
+            ]
+        try:
+            chatty_call(cmd)
+        except CalledProcessError:
+            raise Fatal('fatal: error adding note to %s' % (revision,))
+        else:
+            if verbosity >= 0:
+                sys.stderr.write('Marked commit %s to be %s\n' % (revision, good_bad_text(value)))
 
     def forget_status(self, revisions):
         """Forget the stored results (if any) for the specified revisions."""
@@ -544,7 +562,7 @@ test_config_re = re.compile(r'^test\.(?P<name>.*)\.(?P<subkey>[^\.]+)$')
 def iter_tests():
     """Iterate over all tests that are defined in the git configuration."""
 
-    cmd = ['git', 'config', '--get-regexp', '--null', '^test\.']
+    cmd = ['git', 'config', '--get-regexp', '--null', r'^test\.']
     out = check_output(cmd)
     lines = [line for line in out.split('\0') if line]
 
@@ -679,7 +697,7 @@ def run_in_dirty_tree(tests, extra_env, options):
             except UserTestError as e:
                 sys.stdout.write(
                     'working-tree %s (%s:%s)\n' % (
-                        good_bad_text('bad'), test.name, good_bad_text('bad'),
+                        good_bad_text('❌'), test.name, good_bad_text('❌'),
                     ),
                 )
                 if verbosity >= -1:
@@ -698,7 +716,7 @@ def run_in_dirty_tree(tests, extra_env, options):
             else:
                 sys.stdout.write(
                     'working-tree %s (%s:%s)\n' % (
-                        good_bad_text('good'), test.name, good_bad_text('good'),
+                        good_bad_text('✅'), test.name, good_bad_text('✅'),
                     ),
                 )
                 if verbosity >= -1:
@@ -798,23 +816,23 @@ def cmd_run(parser, options):
 
             status = test.read_status(r, rs)
 
-            if status == 'good':
+            if status == '✅':
                 sys.stdout.write(
                     '%s^{tree} %s (%s:%s)\n' % (
-                        r, good_bad_text('good'), test.name, good_bad_text('known-good'),
+                        r, good_bad_text('✅'), test.name, good_bad_text('✅'),
                     ),
                 )
                 sys.stderr.write(
                     'Tree %s^{tree} is already known to be %s for test \'%s\'.\n' % (
-                        rs, good_bad_text('good'), test.name,
+                        rs, good_bad_text('✅'), test.name,
                     ),
                 )
 
-            elif status == 'bad':
+            elif status == '❌':
                 if options.retest and not options.dry_run:
                     sys.stderr.write(
                         'Tree %s^{tree} was previously tested to be %s for test \'%s\'; retesting...\n' % (
-                            rs, good_bad_text('bad'), test.name,
+                            rs, good_bad_text('❌'), test.name,
                         ),
                         )
                     status = None
@@ -822,12 +840,12 @@ def cmd_run(parser, options):
                 else:
                     sys.stdout.write(
                         '%s^{tree} %s (%s:%s)\n' % (
-                            r, good_bad_text('bad'), test.name, good_bad_text('known-bad'),
+                            r, good_bad_text('❌'), test.name, good_bad_text('❌'),
                         ),
                     )
                     sys.stderr.write(
                         'Tree %s^{tree} is already known to be %s for test \'%s\'!\n' % (
-                            rs, good_bad_text('bad'), test.name,
+                            rs, good_bad_text('❌'), test.name,
                         ),
                     )
                     failed_tests.append('%s:known-bad' % (test.name,))
@@ -858,11 +876,11 @@ def cmd_run(parser, options):
                     # This commit has failed the test.
                     sys.stdout.write(
                         '%s^{tree} %s (%s:%s)\n' % (
-                            r, good_bad_text('bad'), test.name, good_bad_text('bad'),
+                            r, good_bad_text('❌'), test.name, good_bad_text('❌'),
                         ),
                     )
 
-                    test.write_status(r, 'bad')
+                    test.write_status(r, '❌')
 
                     failed_tests.append('%s:bad:retcode=%d' % (test.name, e.returncode,))
                     fail_count += 1
@@ -885,10 +903,10 @@ def cmd_run(parser, options):
                 else:
                     sys.stdout.write(
                         '%s^{tree} %s (%s:%s)\n' % (
-                            r, good_bad_text('good'), test.name, good_bad_text('good'),
+                            r, good_bad_text('✅'), test.name, good_bad_text('✅'),
                         ),
                     )
-                    test.write_status(r, 'good')
+                    test.write_status(r, '✅')
 
                 extra_env['GIT_TEST_PREVIOUS_CHECKED_OUT_COMMIT'] = r
 
@@ -963,18 +981,18 @@ def cmd_results(parser, options):
         revisions = [rev_parse('HEAD')]
 
     for r in revisions:
-        overall_status = 'good'
+        overall_status = '✅'
         per_test_status = []
         for test in tests:
             status = test.read_status(r)
-            if status == 'good':
+            if status == '✅':
                 per_test_status.append('%s:%s' % (AnsiColor.CYAN(test.name), AnsiColor.GREEN(status)))
-            elif status == 'bad':
+            elif status == '❌':
                 per_test_status.append('%s:%s' % (AnsiColor.CYAN(test.name), AnsiColor.RED(status)))
-                overall_status = 'bad'
+                overall_status = '❌'
             elif status == 'unknown':
                 per_test_status.append('%s:%s' % (AnsiColor.CYAN(test.name), AnsiColor.YELLOW(status)))
-                if overall_status == 'good':
+                if overall_status == '✅':
                     overall_status = 'unknown'
 
         per_test_status = ' '.join(per_test_status)
@@ -1316,5 +1334,3 @@ if __name__ == '__main__':
     except Fatal as e:
         sys.stderr.write(AnsiColor.RED('\nERROR!\n%s\n\n' % (e,)))
         sys.exit(125)
-
-

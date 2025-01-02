@@ -577,6 +577,37 @@ def iter_tests():
         yield Test(name, _command=test.get('command'))
 
 
+def get_all_test_names():
+    """Return a list of all defined test names from git config."""
+    return [test.name for test in iter_tests()]
+
+def get_test_names(options, include_all_for_commands=('run', 'results')):
+    """Get test names based on options and command context.
+
+    Args:
+        options: The parsed command line options
+        include_all_for_commands: Commands that should default to all tests when none specified
+
+    Returns:
+        List of test names to process
+    """
+    if options.tests is None:
+        if options.subcommand in include_all_for_commands:
+            return get_all_test_names()
+        return ['default']
+    return options.tests
+
+def add_test_argument(subparser, required=False):
+    """Add the --test/--tests argument to a subparser with consistent behavior."""
+    subparser.add_argument(
+        '--test', '--tests', '-t', metavar='name',
+        action='store', dest='tests',
+        type=csv, default=None,
+        required=required,
+        help='comma-separated name(s) of test(s) (default varies by command)',
+    )
+
+
 def prepare_revision(r):
     try:
         cmd = ['git', 'checkout', r]
@@ -743,7 +774,8 @@ def cmd_run(parser, options):
         'GIT_TEST_PREVIOUS_CHECKED_OUT_COMMIT' : None,
         'GIT_TEST_VERBOSITY' : str(verbosity),
     }
-    tests = [Test(test_name) for test_name in options.tests]
+    test_names = get_test_names(options)
+    tests = [Test(test_name) for test_name in test_names]
 
     try:
         require_clean_work_tree('test-run')
@@ -953,7 +985,8 @@ def cmd_run(parser, options):
 
 
 def cmd_results(parser, options):
-    tests = [Test(test_name) for test_name in options.tests]
+    test_names = get_test_names(options)
+    tests = [Test(test_name) for test_name in test_names]
 
     revisions = list(uniqify(iter_commits(parser, options)))
     if not revisions:
@@ -987,7 +1020,9 @@ def cmd_results(parser, options):
 
 
 def cmd_forget_results(parser, options):
-    tests = [Test(test_name) for test_name in options.tests]
+    test_names = get_test_names(options, include_all_for_commands=())
+    tests = [Test(test_name) for test_name in test_names]
+
     for test in tests:
         cmd = ['git', 'config', 'test.%s.command' % (test.name,)]
         try:
@@ -1025,6 +1060,8 @@ def cmd_list(parser, options):
 
 
 def cmd_remove(parser, options):
+    if options.tests is None:
+        parser.error('--test/--tests is required for the remove command')
     tests = [Test(test_name) for test_name in options.tests]
     for test in tests:
         test.remove('Test results deleted by \'git test remove\'')
@@ -1118,12 +1155,6 @@ def main(args):
 
     def add_run_arguments(subparser):
         subparser.add_argument(
-            '--test', '--tests', '-t', metavar='name',
-            action='store', dest='tests',
-            type=csv, default=['default'],
-            help='comma-separated name(s) of test(s) (default is \'default\')',
-            )
-        subparser.add_argument(
             '--force', '-f', action='store_true',
             help=(
                 'forget any existing test results for the specified '
@@ -1173,6 +1204,7 @@ def main(args):
             ),
         help='run a test against one or more commits',
         )
+    add_test_argument(subparser)
     add_run_arguments(subparser)
     add_verbosity_options(subparser)
 
@@ -1195,12 +1227,7 @@ def main(args):
             ),
         help='show any stored test results for the specified commits',
         )
-    subparser.add_argument(
-        '--test', '--tests', '-t', metavar='name',
-        action='store', dest='tests',
-        type=csv, default=['default'],
-        help='comma-separated name(s) of test(s) (default is \'default\')',
-        )
+    add_test_argument(subparser)
     subparser.add_argument(
         '--stdin', action='store_true',
         help=(
@@ -1220,15 +1247,7 @@ def main(args):
             ),
         help='permanently forget stored results for a test',
         )
-    subparser.add_argument(
-        '--test', '--tests', '-t', metavar='name',
-        action='store', dest='tests',
-        type=csv, default=['default'],
-        help=(
-            'comma-separated name(s) of test(s) whose results should be '
-            'forgotten (default is \'default\')'
-            ),
-        )
+    add_test_argument(subparser, required=True)
     add_verbosity_options(subparser)
 
     subparser = subparsers.add_parser(
@@ -1247,12 +1266,7 @@ def main(args):
             ),
         help='remove a test definition and all of its stored results',
         )
-    subparser.add_argument(
-        '--test', '--tests', '-t', metavar='name',
-        action='store', dest='tests',
-        type=csv, default=['default'],
-        help='comma-separated name(s) of test(s) to remove (default is \'default\')',
-        )
+    add_test_argument(subparser, required=True)
     add_verbosity_options(subparser)
 
     subparser = subparsers.add_parser(
@@ -1316,5 +1330,3 @@ if __name__ == '__main__':
     except Fatal as e:
         sys.stderr.write(AnsiColor.RED('\nERROR!\n%s\n\n' % (e,)))
         sys.exit(125)
-
-

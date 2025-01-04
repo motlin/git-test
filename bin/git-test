@@ -1020,7 +1020,16 @@ def cmd_results(parser, options):
 
             per_test_results.append((test, status_text))
 
-        sys.stdout.write(f'{r}^{{tree}} {good_bad_text(overall_status)}\n')
+        max_status_length = len(good_bad_text("unknown"))
+        status_display = good_bad_text(overall_status).ljust(max_status_length)
+
+        git_log_cmd = f"git log --color=always --decorate --date=short --format=format:'%C(auto)%(decorate)%C(reset) %C(dim)%h%C(reset) %C(brightblue)%ad%C(reset) %N%-C()%C(normal)%<|(80,trunc)%s%C(reset)' -n1 {r}"
+        try:
+            git_log_info = subprocess.check_output(git_log_cmd, shell=True, universal_newlines=True).strip()
+        except subprocess.CalledProcessError:
+            git_log_info = "Error getting git log info"
+
+        sys.stdout.write(f'{status_display}{git_log_info}\n')
 
         # Only print detailed results if there are different statuses
         if len(statuses) > 1:

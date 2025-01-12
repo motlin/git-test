@@ -611,7 +611,7 @@ def add_test_argument(subparser, required=False):
 
 def prepare_revision(r):
     try:
-        cmd = ['git', 'checkout', r]
+        cmd = ['git', 'checkout', '-q', r]
         chatty_call(cmd)
     except CalledProcessError as e:
         raise Fatal('fatal: error checking out commit %s:\n%s' % (r, e.output,))
@@ -619,9 +619,9 @@ def prepare_revision(r):
     if verbosity >= -1:
         cmd = ['git', '--no-pager', 'log', '-1', '--decorate', r]
         try:
-            if verbosity >= 0:
+            if verbosity >= 1:
                 sys.stderr.write('\n')
-            chatty_call(cmd, level=0)
+            chatty_call(cmd, level=1)
             if verbosity >= 0:
                 sys.stderr.write('\n')
         except CalledProcessError as e:

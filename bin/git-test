@@ -457,9 +457,10 @@ class Test(object):
             raise Fatal('fatal: error adding note to %s^{tree}' % (revision,))
         else:
             if verbosity >= 0:
+                test_name = AnsiColor.CYAN(self.name)
                 sys.stderr.write(
                     'Marked tree %s^{tree} to be %s for test \'%s\'\n' % (
-                        revision, good_bad_text(value), self.name,
+                        revision, good_bad_text(value), test_name,
                     ),
                 )
 

@@ -889,12 +889,6 @@ def cmd_run(parser, options):
                     test.run(extra_env=extra_env)
                 except UserTestError as e:
                     # This commit has failed the test.
-                    sys.stdout.write(
-                        '%s^{tree} %s (%s:%s)\n' % (
-                            r, good_bad_text('bad'), test.name, good_bad_text('bad'),
-                        ),
-                    )
-
                     test.write_status(r, 'bad')
 
                     failed_tests.append('%s:bad:retcode=%d' % (test.name, e.returncode,))
@@ -916,11 +910,6 @@ def cmd_run(parser, options):
 
                         sys.exit(e.returncode)
                 else:
-                    sys.stdout.write(
-                        '%s^{tree} %s (%s:%s)\n' % (
-                            r, good_bad_text('good'), test.name, good_bad_text('good'),
-                        ),
-                    )
                     test.write_status(r, 'good')
 
                 extra_env['GIT_TEST_PREVIOUS_CHECKED_OUT_COMMIT'] = r
